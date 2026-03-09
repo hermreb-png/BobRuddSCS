@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bob Rudd Parts Form</title>
+
+<!-- QR Scanner -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<!-- Google Identity Services (Sign in with Google) -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<style>
+body{
+    font-family:'Open Sans', sans-serif;
+    background:#f5f7fb;
+    margin:0;
+    padding:20px;
+}
+
+.container{
+    max-width:630px;
+    margin:auto;
+    background:white;
+    padding:25px;
+    border-radius:10px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.1);
+}
+
+h2{
+    text-align:center;
+    color:#00126b;
+}
+
+.form-row{
+    display:flex;
+    gap:15px;
+    margin-bottom:15px;
+    align-items:center;
+}
+
+.form-row label{
+    flex:0 0 220px;
+    font-weight:600;
+}
+
+.form-row input,
+.form-row select{
+    flex:1;
+    width:100%;
+    box-sizing:border-box;
+    padding:8px;
+    border:1px solid #00126b;
+    border-radius:4px;
+}
+
+/* Readonly / logged-in display */
+.readonly-display{
+    background:#eef2ff;
+    border:1px dashed #6b7cff;
+    color:#0f172a;
+    font-weight:600;
+}
+
+.inline-field{
+    flex:1;
+    min-width:0;
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+
+.inline-field > input,
+.inline-field > select{
+    flex:1;
+    min-width:0;
+    width:100%;
+    box-sizing:border-box;
+}
+
+.btn-inline{
+    width:140px; /* uniform width for all inline buttons */
+    padding:10px 14px;
+    border-radius:8px;
+    background:#3860b2;
+    color:#fff;
+    border:none;
+    cursor:pointer;
+    font-weight:bold;
+    white-space:nowrap;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+.btn-inline:hover{ background:#2f4f94; }
+
+.form-row input:read-only{
+    cursor:not-allowed;
+}
+
+.hidden{
+    display:none;
+}
+
+button{
+    background:#3860b2;
+    color:white;
+    border:none;
+    padding:14px 28px;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:bold;
+    width:200px;
+}
+
+button:hover{
+    background:#2f4f94;
+}
+
+.center-button{
+    text-align:center;
+    margin-bottom:15px;
+}
+
+.success{ color:green; text-align:center; margin-top:10px; }
+.error{ color:red; text-align:center; margin-top:10px; }
+
+#reader{
+    width:300px;
+    margin:20px auto;
+}
+
+#authGate p{ color:#334155; }
+
+/* Submit animation */
+.container.sending{
+    animation: foldFly 1800ms cubic-bezier(.2,.8,.2,1) forwards;
+    transform-origin: 50% 10%;
+}
+
+@keyframes foldFly{
+    0%{ transform: perspective(1000px) rotateX(0deg) translateY(0) scale(1) translateZ(0); opacity:1; }
+    25%{ transform: perspective(1000px) rotateX(25deg) translateY(-10px) scale(0.95) translateZ(-50px); opacity:1; }
+    50%{ transform: perspective(1000px) rotateX(45deg) translateY(-40px) scale(0.85) translateZ(-200px); opacity:0.9; }
+    75%{ transform: perspective(1000px) rotateX(65deg) translateY(-120px) scale(0.6) translateZ(-600px); opacity:0.6; }
+    100%{ transform: perspective(1000px) rotateX(80deg) translateY(-400px) scale(0.2) translateZ(-1200px); opacity:0; }
+}
+
+/* Sparks */
+#sendFx{
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+}
+
+.fx-spark{
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: currentColor;
+    opacity: 0;
+    animation: spark 650ms ease-out forwards;
+}
+
+@keyframes spark{
+    0%{ transform: translate(0,0) rotate(0deg) scale(0.7); opacity: 1; }
+    70%{ opacity: 1; }
+    100%{ transform: translate(var(--dx), var(--dy)) rotate(220deg) scale(0.1); opacity: 0; }
+}
+
+button[disabled]{
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+</style>
+</head>
+
+<body>
+
+<div id="sendFx"></div>
+
+<div class="container" id="mainContainer">
+
+<!-- Login gate -->
+<div id="authGate">
+  <h2>Sign in required</h2>
+  <p style="text-align:center;margin-top:-10px;">Please sign in with your Google account to continue.</p>
+  <div id="g_id_onload"></div>
+  <div style="display:flex;justify-content:center;margin:18px 0;">
+    <div id="googleBtn"></div>
+  </div>
+  <div id="authMsg" class="error" style="display:none;"></div>
+</div>
+
+<form id="partsForm" class="hidden">
+
+<h2>Technician Details</h2>
+
+<div class="form-row">
+<label>Logged in as:</label>
+<div class="inline-field">
+  <input type="text" id="nameLastname" class="readonly-display" placeholder="Will be filled after sign-in" readonly>
+  <button type="button" class="btn-inline" onclick="logout()">Log out</button>
+</div>
+</div>
+
+<div class="form-row">
+<label>Depot</label>
+<select id="depot">
+<option value="">Select</option>
+<option>Newcastle</option>
+<option>Leeds</option>
+<option>Haydock</option>
+<option>Keswick</option>
+<option>Nottingham</option>
+<option>Birmingham</option>
+</select>
+</div>
+
+<h2>Action</h2>
+
+<div class="form-row">
+<label>Action</label>
+<select id="action">
+<option value="">Select</option>
+<option>Part installed</option>
+<option>Part request</option>
+<option>Part issued</option>
+<option>Part booked in</option>
+<option>Part transfer</option>
+<option>Part box transferred</option>
+</select>
+</div>
+
+<div id="partDetailsSection" class="hidden">
+
+<h2>Part Details</h2>
+
+<div id="reader"></div>
+
+<div class="form-row" id="partGroupRow">
+<label>Part Group</label>
+<div class="inline-field">
+  <select id="partGroup">
+<option value="">Select</option>
+<option>BR Parts</option>
+<option>Consumables</option>
+</select>
+  <button type="button" class="btn-inline" onclick="startAssetScanner()">Scan asset</button>
+</div>
+</div>
+
+<div class="form-row" id="partTypeRow">
+<label>Part</label>
+<select id="partType">
+<option value="">Select</option>
+</select>
+</div>
+
+<div class="form-row" id="assetNumberRow">
+<label>Asset Number</label>
+<input type="text" id="assetNumber">
+</div>
+
+<div class="form-row hidden" id="partsBoxRow">
+<label>Part Box</label>
+<div class="inline-field">
+  <input type="text" id="partsBox" placeholder="Enter box / location">
+  <button type="button" class="btn-inline" onclick="startPartBoxScanner()">Scan Part box</button>
+</div>
+</div>
+
+<div class="form-row hidden" id="transferToRow">
+<label>Transfer To</label>
+<input list="techList" id="transferTo" placeholder="Start typing a name...">
+<datalist id="techList">
+<option value="Adam Boyd">
+<option value="Adam Cochrane">
+<option value="Adam Mansfield">
+<option value="Alex Spreyer">
+<option value="Anton Artusa">
+<option value="Brian Ascroft">
+<option value="Charlie Swombow">
+<option value="Chris Dudley">
+<option value="Chris Sephton-Fallon">
+<option value="Dave Bundy">
+<option value="David Murray">
+<option value="Graham Wright">
+<option value="Hassan Zahid">
+<option value="Ian Miller">
+<option value="Jack Hitchcock">
+<option value="Jake Dawson">
+<option value="Jamie Unsworth">
+<option value="Joe Brunton">
+<option value="John Allenby">
+<option value="John Hoyle">
+<option value="Johnnie Doolan">
+<option value="Jordan Webb">
+<option value="Josh Burns">
+<option value="Kevin Greenall">
+<option value="Kevin McNamara">
+<option value="Lee Addison">
+<option value="Lee Steele">
+<option value="Marius Daraban">
+<option value="Mark Pickering">
+<option value="Marvin Watson">
+<option value="Matthew Endeacott">
+<option value="Melvin Hart">
+<option value="Michael Forster">
+<option value="Michael Rose">
+<option value="Mike Heaton">
+<option value="Mikey Stainton">
+<option value="Nass Kapranos">
+<option value="Neil Smith">
+<option value="Omari Scott">
+<option value="Paul Orchard">
+<option value="Ray Philip">
+<option value="Robert Flipowicz">
+<option value="Sami Haider">
+<option value="Sean wallace">
+<option value="Steven Wilby">
+<option value="Tomas Salda">
+<option value="Wayne Higgins">
+</datalist>
+</div>
+
+<div class="form-row hidden" id="replacedPartRow">
+<label>Asset Number Replaced Part</label>
+<div class="inline-field">
+  <input type="text" id="assetReplaced">
+  <button type="button" class="btn-inline" onclick="startReplacedAssetScanner()">Scan asset</button>
+</div>
+</div>
+
+<div class="form-row hidden" id="partStatusRow">
+<label>Part Status</label>
+<select id="partStatus">
+<option value="">Select</option>
+<option>Faulty</option>
+<option>Working</option>
+<option>New</option>
+</select>
+</div>
+
+<div class="form-row hidden" id="invoiceRow">
+<label>PO / Invoice Number</label>
+<input type="text" id="invoiceNumber">
+</div>
+
+<div class="form-row hidden" id="repairRow">
+<label>Repair Centre</label>
+<select id="repairCentre">
+<option value="">Select</option>
+<option>Bob Rudd</option>
+<option>Techno</option>
+<option>Manufacturer</option>
+</select>
+</div>
+
+<div class="form-row hidden" id="requestReplacementRow">
+<label>Request Replacement?</label>
+<select id="requestReplacement">
+<option value="">Select</option>
+<option>Yes</option>
+<option>No</option>
+</select>
+</div>
+
+<div class="form-row hidden" id="machineRow">
+<label>Machine in Working Order?</label>
+<select id="machineStatus">
+<option value="">Select</option>
+<option>IWO</option>
+<option>OOO</option>
+</select>
+</div>
+
+<br>
+
+<div class="center-button">
+<button type="submit">Submit</button>
+</div>
+
+</div>
+
+</form>
+
+<div id="message"></div>
+
+</div>
+
+<script>
+
+
+const GOOGLE_CLIENT_ID = "832909233616-fp01842u2dt79d24m9tfkfejbcirk7vr.apps.googleusercontent.com";
+
+let signedInEmail = "";
+let signedInName = ""; // display name shown in "Logged in as"
+
+// Remember login until user logs out (lightweight client-side memory)
+const LS_EMAIL_KEY = "br_parts_email";
+
+function base64UrlDecode(str){
+    // base64url -> base64
+    str = str.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = str.length % 4;
+    if(pad) str += "=".repeat(4 - pad);
+    try{
+        return decodeURIComponent(atob(str).split("").map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join(""));
+    } catch(e){
+        return atob(str);
+    }
+}
+
+function decodeJwt(token){
+    const parts = (token || "").split(".");
+    if(parts.length < 2) return null;
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    return payload;
+}
+
+function showAuthError(msg){
+    const el = document.getElementById("authMsg");
+    if(!el) return;
+    el.style.display = "block";
+    el.textContent = msg;
+}
+
+function logout(){
+    signedInEmail = "";
+    signedInName = "";
+    try{ localStorage.removeItem(LS_EMAIL_KEY); } catch(e){}
+
+    // Hide form + show gate
+    document.getElementById("partsForm").classList.add("hidden");
+    document.getElementById("authGate").classList.remove("hidden");
+
+    // Clear displayed email
+    const nameInput = document.getElementById("nameLastname");
+    if(nameInput) nameInput.value = "";
+
+    // Prevent auto-select from instantly signing back in until user chooses
+    try{ google.accounts.id.disableAutoSelect(); } catch(e){}
+}
+
+function onGoogleCredentialResponse(response){
+    // response.credential is a JWT (ID token). In production, verify this token on a server.
+    const payload = decodeJwt(response.credential);
+    if(!payload || !payload.email){
+        showAuthError("Could not read email from Google sign-in.");
+        return;
+    }
+
+    signedInEmail = payload.email;
+
+    // Prefer Google's full name; fall back safely
+    const fullName = payload.name || ((payload.given_name && payload.family_name) ? (payload.given_name + " " + payload.family_name) : payload.email);
+    signedInName = fullName;
+    // persist
+    try{ localStorage.setItem(LS_EMAIL_KEY, JSON.stringify({email:signedInEmail,name:signedInName})); } catch(e){}
+
+    // Fill technician field with the user's email address
+    const nameInput = document.getElementById("nameLastname");
+    nameInput.value = fullName;
+
+    // Unlock the form
+    document.getElementById("authGate").classList.add("hidden");
+    document.getElementById("partsForm").classList.remove("hidden");
+
+    // Ensure action-dependent fields are set correctly after unlock
+    try{ toggleDynamicFields();
+
+// Re‑evaluate repair centre visibility when status changes
+if(partStatus){
+    partStatus.addEventListener("change", () => {
+        if(actionSelect.value === "Part booked in"){
+
+            // show invoice only when new
+            if(partStatus.value === "New"){
+                setRowVisible("invoiceRow", true);
+            }else{
+                setRowVisible("invoiceRow", false);
+            }
+
+            // show repair centre only when faulty
+            if(partStatus.value === "Faulty"){
+                setRowVisible("repairRow", true);
+            }else{
+                setRowVisible("repairRow", false);
+            }
+        }
+    });
+}
+} catch(e){}
+}
+
+window.addEventListener("load", () => {
+    // Don’t initialize if client id isn't configured
+    if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes("YOUR_GOOGLE_CLIENT_ID")){
+        showAuthError("Google Client ID not configured. Add your Client ID in GOOGLE_CLIENT_ID.");
+        return;
+    }
+
+    google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: onGoogleCredentialResponse,
+        // if the user has an active Google session, this can sign them back in without clicking
+        auto_select: true,
+        cancel_on_tap_outside: true
+    });
+
+    google.accounts.id.renderButton(
+        document.getElementById("googleBtn"),
+        { theme: "outline", size: "large", text: "signin_with", shape: "rectangular" }
+    );
+
+    // If we previously logged in, try to restore immediately while still prompting Google silently.
+    try {
+        const cached = localStorage.getItem(LS_EMAIL_KEY);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            signedInEmail = parsed.email || "";
+
+            const nameInput = document.getElementById("nameLastname");
+            if (nameInput) nameInput.value = parsed.name || parsed.email || "";
+            signedInName = parsed.name || parsed.email || "";
+
+            document.getElementById("authGate").classList.add("hidden");
+            document.getElementById("partsForm").classList.remove("hidden");
+            try { toggleDynamicFields(); } catch (e) {}
+        }
+    } catch (e) {}
+
+    // Ask Google to re-issue a credential if possible (keeps it truly signed-in)
+    try{ google.accounts.id.prompt(); } catch(e){}
+});
+
+// FULL BR PARTS LIST
+const brParts = [
+"BP Quixant Alphastar PC","BP Quixant Alphamax PC","BP Coin Mech",
+"BP Quixant Ultramax PC","BP PSU","BP Coin Mech",
+"BP Ultramax TS Monitor","BP Interface Boards","BP MD100",
+"INSP Prismatic PC","INSP Prismatic Backplane","INSP PSU",
+"INSP Prismatic TS Monitor","INSP Vantage TS Monitor",
+"INSP Vantage Monitor","INSP Interface PCB","INSP Coin Mech",
+"INNOV8 PC Edge","INNOV8 PSU Edge","INNOV8 TS Monitor Edge",
+"INNOV8 Monitor","INNOV8 Coin Mech",
+"REFLEX Cyclone PC","REFLEX Cyclone TS Monitor",
+"REFLEX Cyclone Monitor","REFLEX Cyclone Coin Mech",
+"REFLEX Cyclone Smart Hopper","REFLEX Cyclone PSU",
+"REFLEX GP PC","REFLEX GP TS Monitor","REFLEX GP Monitor",
+"REFLEX GP Coin Mech","REFLEX GP Smart Hopper",
+"REFLEX GP PSU","NV11 Spectral","NV11","NV22 Spectral",
+"MV200 Spectral","NV200","Smart Pay",
+"Universal Hopper","SCH5 Hopper"
+];
+
+const consumables = ["Pool cue long","Pool cue short"];
+
+document.getElementById("partGroup").addEventListener("change", function(){
+    rebuildPartDropdown(this.value);
+});
+
+// Dynamic field visibility based on Action
+const actionSelect = document.getElementById("action");
+const partStatus = document.getElementById("partStatus");
+actionSelect.addEventListener("change", toggleDynamicFields);
+
+toggleDynamicFields();
+
+function setRowVisible(rowId, visible){
+    const row = document.getElementById(rowId);
+    if(!row) return;
+    if(visible){
+        row.classList.remove("hidden");
+    } else {
+        row.classList.add("hidden");
+        // clear inputs when hidden so values don't get reused accidentally
+        const inputs = row.querySelectorAll("input, select");
+        inputs.forEach(el => {
+            if(el.tagName === "SELECT") el.value = "";
+            else el.value = "";
+        });
+    }
+}
+
+function toggleDynamicFields(){
+    const a = actionSelect.value;
+
+    // Hide all part details until an Action is selected
+    const partSection = document.getElementById("partDetailsSection");
+    if(!a){
+        if(partSection) partSection.classList.add("hidden");
+        // stop camera if it’s running
+        try{ stopScanner(); } catch(e){}
+
+        // clear core part fields so nothing lingers
+        try{
+            partGroup.value = "";
+            partType.innerHTML = '<option value="">Select</option>';
+            assetNumber.value = "";
+            partsBox.value = "";
+            transferTo.value = "";
+            assetReplaced.value = "";
+            invoiceNumber.value = "";
+            partStatus.value = "";
+            repairCentre.value = "";
+            requestReplacement.value = "";
+            machineStatus.value = "";
+        } catch(e){}
+        return;
+    } else {
+        if(partSection) partSection.classList.remove("hidden");
+    }
+
+    // Hide all conditional rows first
+    [
+        "partsBoxRow",
+        "transferToRow",
+        "replacedPartRow",
+        "partStatusRow",
+        "invoiceRow",
+        "repairRow",
+        "requestReplacementRow",
+        "machineRow"
+    ].forEach(id => setRowVisible(id, false));
+
+    // Default: show the core part fields (unless action says otherwise)
+    setRowVisible("partGroupRow", true);
+    setRowVisible("partTypeRow", true);
+    setRowVisible("assetNumberRow", true);
+
+    // (handled above as defaults)
+
+    // Show what’s relevant per action
+    if(a === "Part transfer"){
+        setRowVisible("transferToRow", true);
+    }
+
+    if(a === "Part box transferred"){
+        // For box transfers we only need box + who it goes to (no part / asset details)
+        setRowVisible("partGroupRow", false);
+        setRowVisible("partTypeRow", false);
+        setRowVisible("assetNumberRow", false);
+
+        setRowVisible("partsBoxRow", true);
+        setRowVisible("transferToRow", true);
+    }
+
+    if(a === "Part issued"){
+        setRowVisible("transferToRow", true);
+        setRowVisible("partsBoxRow", true);
+    }
+
+    if(a === "Part request"){
+        setRowVisible("partsBoxRow", true);
+        setRowVisible("assetNumberRow", false);
+        setRowVisible("machineRow", true);
+    }
+
+    if(a === "Part installed"){
+        setRowVisible("replacedPartRow", true);
+        setRowVisible("partStatusRow", true);
+        setRowVisible("machineRow", true);
+        setRowVisible("requestReplacementRow", true);
+    }
+
+    if(a === "Part booked in"){
+        setRowVisible("partStatusRow", true);
+
+        // PO / Invoice only when status = New
+        if(partStatus.value === "New"){
+            setRowVisible("invoiceRow", true);
+        }
+
+        // Repair centre only when status = Faulty
+        if(partStatus.value === "Faulty"){
+            setRowVisible("repairRow", true);
+        }
+    }
+    
+}
+
+function rebuildPartDropdown(group){
+    const partSelect = document.getElementById("partType");
+    partSelect.options.length = 0;
+    partSelect.add(new Option("Select",""));
+    const list = group === "Consumables" ? consumables : brParts;
+    list.forEach(p => partSelect.add(new Option(p,p)));
+}
+
+// Reusable QR instance
+let qrScanner = null;
+
+async function stopScanner(){
+    if(!qrScanner) return;
+    try{ await qrScanner.stop(); } catch(e){}
+    try{ await qrScanner.clear(); } catch(e){}
+    qrScanner = null;
+}
+
+function startAssetScanner(){
+    stopScanner();
+    qrScanner = new Html5Qrcode("reader");
+    qrScanner.start({ facingMode:"environment" },{ fps:10 }, async text=>{
+        const scanned = (text || "").trim();
+
+        // Expected asset QR format: PartGroup;Part;AssetNumber
+        const parts = scanned.split(";");
+        if(parts.length===3){
+            partGroup.value = parts[0].trim();
+            partGroup.dispatchEvent(new Event("change"));
+            await new Promise(r=>setTimeout(r,50));
+            partType.value = parts[1].trim();
+            assetNumber.value = parts[2].trim();
+        }
+
+        await stopScanner();
+    });
+}
+
+function startPartBoxScanner(){
+    stopScanner();
+    qrScanner = new Html5Qrcode("reader");
+    qrScanner.start({ facingMode:"environment" },{ fps:10 }, async text=>{
+        const scanned = (text || "").trim();
+
+        // Part box QR is a single value (no splitting)
+        setRowVisible("partsBoxRow", true);
+        partsBox.value = scanned;
+
+        await stopScanner();
+    });
+}
+
+function startReplacedAssetScanner(){
+    stopScanner();
+    qrScanner = new Html5Qrcode("reader");
+    qrScanner.start({ facingMode:"environment" },{ fps:10 }, async text=>{
+        const scanned = (text || "").trim();
+
+        // Expected format: PartGroup;Part;AssetNumber
+        const parts = scanned.split(";");
+        if(parts.length === 3){
+            assetReplaced.value = parts[2].trim();
+        }
+
+        await stopScanner();
+    });
+}
+
+
+document.getElementById("partsForm").addEventListener("submit", async function(e){
+    e.preventDefault();
+
+    const visibleFields = document.querySelectorAll(".form-row:not(.hidden) input, .form-row:not(.hidden) select");
+    for(let field of visibleFields){
+        if(field.value===""){
+            message.innerHTML='<div class="error">Please complete all visible fields</div>';
+            return;
+        }
+    }
+
+    const data = {
+        apiKey: "BR123",
+        signedInEmail: signedInEmail,
+        name:nameLastname.value,
+        depot:depot.value,
+        action:action.value,
+        partGroup:partGroup.value,
+        partType:partType.value,
+        assetNumber:assetNumber.value,
+        partsBox:partsBox.value,
+        transferTo:transferTo.value,
+        assetReplaced:assetReplaced.value,
+        invoice:invoiceNumber.value,
+        partStatus:partStatus.value,
+        repairCentre:repairCentre.value,
+        requestReplacement:requestReplacement.value,
+        machineStatus:machineStatus.value
+    };
+
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn ? submitBtn.textContent : "Submit";
+
+    // UI: sending state
+    if(submitBtn){
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Sending…";
+    }
+    message.innerHTML = '';
+
+    try{
+        const res = await fetch("https://default86f340ba56c24892b82561fdf5ea92.af.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6231fabfbbaa45dd92e61236a3c8fdb1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=x7U-brdutbr9fCjvoLOajNHdRMs1FNP4qmwwaj_LgWY",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(data)
+        });
+
+        if(!res.ok){
+            throw new Error("Send failed (" + res.status + ")");
+        }
+
+        // Visual success effect
+        triggerSendFx();
+
+        // Fold + fly (brief), then bring back
+        const containerEl = document.getElementById("mainContainer");
+        containerEl.classList.add("sending");
+
+        // Success message (shown after a short beat)
+        setTimeout(() => {
+            message.innerHTML='<div class="success">Submitted successfully!</div>';
+        }, 250);
+
+        // After animation, restore container + clear form fields
+        setTimeout(() => {
+            containerEl.classList.remove("sending");
+            containerEl.style.opacity = "1";
+
+            // Reset form ONLY after successful submission
+            const currentDepot = depot.value; // preserve depot
+            const currentName = signedInName || nameLastname.value; // preserve display name
+
+            document.getElementById("partsForm").reset();
+
+            // restore values that should persist
+            if(currentName){
+                nameLastname.value = currentName;
+            }
+            if(currentDepot){
+                depot.value = currentDepot;
+            }
+
+            partType.innerHTML='<option value="">Select</option>';
+
+            // Hide Part Details again until action selected
+            action.value = "";
+            try{ toggleDynamicFields(); } catch(e){}
+
+            if(submitBtn){
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalBtnText;
+            }
+        }, 950);
+
+    } catch(err){
+        message.innerHTML='<div class="error">Something went wrong sending the form. Please try again.</div>';
+        if(submitBtn){
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+        }
+    }
+
+    
+});
+
+
+
+function triggerSendFx(){
+    const fx = document.getElementById("sendFx");
+    if(!fx) return;
+    fx.innerHTML = "";
+
+    const rect = document.getElementById("mainContainer").getBoundingClientRect();
+    const originX = rect.left + rect.width * 0.5;
+    const originY = rect.top + 140; // around the form header area
+
+    const colors = ["#22c55e", "#60a5fa", "#f59e0b", "#a78bfa", "#ef4444"];
+
+    const count = 26;
+    for(let i=0;i<count;i++){
+        const s = document.createElement("span");
+        s.className = "fx-spark";
+        s.style.left = originX + "px";
+        s.style.top = originY + "px";
+        s.style.color = colors[i % colors.length];
+
+        const dx = (Math.random() * 260 - 130).toFixed(0) + "px";
+        const dy = (Math.random() * 220 - 140).toFixed(0) + "px";
+        s.style.setProperty("--dx", dx);
+        s.style.setProperty("--dy", dy);
+
+        // random delay so it feels more organic
+        s.style.animationDelay = (Math.random() * 120).toFixed(0) + "ms";
+
+        fx.appendChild(s);
+    }
+
+    // cleanup
+    setTimeout(() => {
+        fx.innerHTML = "";
+    }, 900);
+}
+
+</script>
+
+</body>
+</html>
